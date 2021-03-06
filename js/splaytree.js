@@ -1,3 +1,5 @@
+var svgTree
+var g_Node
 var g_tree = []
 var g_index = 1;
 var g_diameter = 20;
@@ -8,12 +10,10 @@ var g_startY = g_yStep;
 var g_insertStage = "compare";		//"compare", "move"
 var g_highlight = 0;
 var g_value = null;
-var svgTree
-var g_Node
+var g_isPlaying = false;
 
 // parent id : 0  : root
 //			  -1 : new node
-
 function Node(id, val, x, y)
 {
 	this.id = id;
@@ -49,6 +49,8 @@ window.onload = function() {
 			this.value = this.value.slice(0, this.maxLength);			
 		}
 	}
+
+	onPlay();
 }
 
 function onChangeCanvasSize () {
@@ -148,11 +150,11 @@ function onInsert(){
 		return;
 
 	if( g_tree.length == 0 ) {
-		g_value = new Node(g_index++, val, g_startX, g_startY)
+		g_value = new Node(g_index++, +val, g_startX, g_startY)
 		g_value.parent = 0;
 		g_tree.push(g_value)
 	} else {
-		g_value = new Node(g_index++, val, g_diameter * 2, g_diameter * 2)
+		g_value = new Node(g_index++, +val, g_diameter * 2, g_diameter * 2)
 		g_tree.push(g_value)
 	}
 
@@ -160,6 +162,9 @@ function onInsert(){
 	g_insertStage = "";
 
 	updateSvg();
+
+	if( g_isPlaying )
+		play();
 }
 
 
@@ -219,13 +224,45 @@ function resizeWidths(tree)
 	return tree.leftWidth + tree.rightWidth;
 }
 
+function play() {
+	var aniSpeed = document.getElementById("animation_speed").value
+	setTimeout(function() {
+		var ret = onStepForward()
+		if( g_isPlaying && ret ) {
+			play()
+		}
+	}, aniSpeed);
+}
+
+function onPlay() {
+	g_isPlaying = !g_isPlaying
+
+	if( g_isPlaying ) {
+		document.getElementById("control_stepback").disabled = true;
+		document.getElementById("control_stepforward").disabled = true;
+		document.getElementById("control_skipforward").disabled = true;
+
+		document.getElementById("control_play").value = "Pause";		
+	} else {
+		document.getElementById("control_stepback").disabled = false;
+		document.getElementById("control_stepforward").disabled = false;
+		document.getElementById("control_skipforward").disabled = false;
+
+		document.getElementById("control_play").value = "Play";		
+	}
+	play();
+}
 
 function onStepForward () {
-	if( goInsertNextStep() == false ) {
+	var ret = goInsertNextStep()
+
+	if( ret == false ) {
 		//goNext
 	}
 
 	updateSvg()
+
+	return ret;
 }
 
 function calcLineXY(x1, y1, x2, y2, r) {
@@ -274,9 +311,10 @@ function updateSvg() {
         .attr("y", 5)
         .text(function(d) { return d.value })
 
+	var aniSpeed = document.getElementById("animation_speed").value
     //update all circles to new positions
     var updateNode = nodes.transition()
-        .duration(1000)
+        .duration(aniSpeed / 2)
 
     updateNode.select('.point')
         .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")" })
@@ -292,78 +330,12 @@ function updateSvg() {
         	return "white"
         });
 
-    updateNode.select(".unlink")
+    updateNode.select(".unlink, .link")
     	.attr("class", function(d) {
     		if( d.parent == 0 || d.parent == -1 ) 
         		return "unlink"
         	return "link"
     	})    	
-        .attr("x1",function(d)  {
-        	if( d.parent == 0 )
-        		return d.x
-
-        	var parent = d.parent;
-        	if( d.parent == -1 ) {
-        		if( g_highlight == 0 )
-	        		return d.x
-
-	        	parent = g_highlight
-        	}
-        	var parentNode = findNode(parent);
-
-        	var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
-        	return dot[0]
-        })
-        .attr("y1",function(d) {
-        	if( d.parent == 0 )
-        		return d.y
-
-        	var parent = d.parent;
-        	if( d.parent == -1 ) {
-        		if( g_highlight == 0 )
-	        		return d.y
-
-	        	parent = g_highlight
-        	}
-        	var parentNode = findNode(parent);
-
-        	var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
-        	return dot[1]
-        })
-        .attr("x2",function(d) {
-        	if( d.parent == 0 )
-        		return d.x
-
-        	var parent = d.parent;
-        	if( d.parent == -1 ) {
-        		if( g_highlight == 0 )
-	        		return d.x
-
-	        	parent = g_highlight
-        	}
-        	var parentNode = findNode(parent);
-
-        	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
-        	return dot[0]
-        })
-        .attr("y2",function(d) {        	
-        	if( d.parent == 0 )
-        		return d.y
-
-        	var parent = d.parent;
-        	if( d.parent == -1 ) {
-        		if( g_highlight == 0 )
-	        		return d.y
-
-	        	parent = g_highlight
-        	}
-        	var parentNode = findNode(parent);
-
-        	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
-        	return dot[1]
-        })
-
-    updateNode.select(".link")
         .attr("x1",function(d)  {
         	if( d.parent == 0 )
         		return d.x
