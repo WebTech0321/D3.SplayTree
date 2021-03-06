@@ -1,13 +1,14 @@
 var svgTree
 var g_Node
 var g_tree = []
+var g_selection = []
 var g_index = 1;
 var g_diameter = 20;
 var g_xStep = 50
 var g_yStep = 50
 var g_startX = 0;
 var g_startY = g_yStep;
-var g_insertStage = "compare";		//"compare", "move"
+var g_insertStage = "compare";		//"compare", "move", "insert"
 var g_highlight = 0;
 var g_value = null;
 var g_isPlaying = false;
@@ -79,17 +80,35 @@ function goInsertNextStep() {
 	if( g_value == null || g_value.parent != -1)
 		return false;
 
-	if( g_insertStage == "" || g_insertStage == "move" ) {
+	var node
+	if( g_insertStage == "" || g_insertStage == "insert" ) {
 		g_insertStage = "compare"
+		if( g_highlight == 0 ) {
+			node = findRootNode();
+		} else {
+			node = findNode(g_highlight);
+		}
+		g_highlight = node.id
+		g_selection.push( node )
+	} else if (g_insertStage == "compare" ){
+		g_insertStage = "move"
 
 		if( g_highlight == 0 ) {
-			g_highlight = findRootNode().id;
+			node = findRootNode()
 		} else {
-			g_highlight = findNode(g_highlight).id;
+			node = findNode(g_highlight);
 		}
-	} else {
-		g_insertStage = "move"
-		var node;
+		g_selection = [];
+		if( node.value > g_value.value ) {
+			if( node.left > 0 )
+				g_selection.push( findNode(node.left) )
+		} else {
+			if( node.right > 0 )
+				g_selection.push( findNode(node.right) )
+		}
+	} else if (g_insertStage == "move") {		
+		g_insertStage = "insert"
+		g_selection = [];
 		if( g_highlight == 0 ) {
 			node = findRootNode()
 		} else {
@@ -400,6 +419,25 @@ function updateSvg() {
         	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
         	return dot[1]
         })
+
+    //////////////////////////////////////////
+    var selection = g_Node.selectAll(".selection").data(g_selection);
+
+    selection.exit().remove();//remove unneeded circles
+    var node = selection.enter()
+    				.append("circle")
+    				.attr('class', 'selection')
+			        .attr("r",g_diameter)
+			        .attr("cx", function(d) { return d.x})
+			        .attr("cy", function(d) { return d.y})
+			        .attr("visibility", "hidden")
+
+    //update all circles to new positions
+    var updateSelection = selection.transition()
+        .duration(aniSpeed / 2)
+        .attr("visibility", "visible")
+        .attr("cx", function(d) { return d.x})
+        .attr("cy", function(d) { return d.y})
 
 }
 
