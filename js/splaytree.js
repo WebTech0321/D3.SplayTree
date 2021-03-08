@@ -8,12 +8,21 @@ var g_xStep = 50
 var g_yStep = 50
 var g_startX = 0;
 var g_startY = g_yStep;
-var g_insertStage = "compare";		//"compare", "move", "insert"
+var g_printY = 0;
+var g_Stage = "compare";		//"compare", "move", "insert"
 var g_splayStage = "mark_arrow";		//"mark_arrow", "move"
 var g_highlight = 0;
 var g_highlight_arrow = [0, 0];
 var g_value = null;
 var g_isPlaying = true;
+var g_command = ""		//"insert", "delete", "find", "print"
+var g_print_queue = [];
+var g_delete_left = null;
+var g_delete_right = null;
+
+const PRINT_POS_X  = 20;
+const PRINT_VERTICAL_GAP  = 20;
+const PRINT_HORIZONTAL_GAP = 40;
 
 // parent id : 0  : root
 //			  -1 : new node
@@ -25,6 +34,7 @@ function Node(id, val, x, y)
 	this.y = y;
 	this.leftWidth = 0;
 	this.rightWidth = 0;
+	this.print = false;
 	this.left = 0;
 	this.right = 0;
 	this.parent = -1;	// undefined
@@ -45,7 +55,9 @@ window.onload = function() {
 	g_Node = svgTree.append("g")
 
 	var w = document.getElementById("svg_width").value
+	var h = document.getElementById("svg_height").value
 	g_startX = w / 2;
+	g_printY = h - PRINT_VERTICAL_GAP * 3
 
 	document.getElementById("inNumber").oninput = function(e) {
 		if( this.value.length > this.maxLength ) {
@@ -61,6 +73,10 @@ function onChangeCanvasSize () {
 	var h = document.getElementById("svg_height").value
 	document.getElementById("d3-splaytree").setAttribute('width', w)
 	document.getElementById("d3-splaytree").setAttribute('height', h)
+	g_startX = w / 2;
+
+	resizeTree();
+	updateSvg();
 }
 
 function onMoveControl () {
@@ -91,7 +107,8 @@ function onInsert(){
 	}
 
 	g_highlight = 0;
-	g_insertStage = "";
+	g_command = "insert"
+	g_Stage = "";	
 
 	updateSvg();
 
@@ -102,16 +119,37 @@ function onInsert(){
 
 function onDelete(){
 	g_highlight = 0;
+	g_command = "delete"
+	g_Stage = "";
+
+	if( g_isPlaying )
+		play();
 }
 
 
 function onFind(){
 	g_highlight = 0;
+	g_command = "find"
+	g_Stage = "";	
+	g_value = null
+	
+	if( g_isPlaying )
+		play();
 }
 
 
 function onPrint(){
 	g_highlight = 0;
+	g_command = "print"
+	g_Stage = "compare";
+	g_print_queue = []
+
+	g_tree.map((item) => {
+		item.print = false
+	})
+	
+	if( g_isPlaying )
+		play();
 }
 
 function goInsertNextStep() {
@@ -121,7 +159,7 @@ function goInsertNextStep() {
 		return false;
 
 	var node
-	if( g_insertStage == "" || g_insertStage == "compare" ) {
+	if( g_Stage == "" || g_Stage == "compare" ) {
 		if( g_highlight == 0 ) {
 			node = findRootNode();
 		} else {
@@ -129,8 +167,8 @@ function goInsertNextStep() {
 		}
 		g_highlight = node.id
 		g_selection.push( node )
-		g_insertStage = "move"		
-	} else if (g_insertStage == "move" ){
+		g_Stage = "move"		
+	} else if (g_Stage == "move" ){
 		if( g_highlight == 0 ) {
 			node = findRootNode()
 		} else {
@@ -141,21 +179,21 @@ function goInsertNextStep() {
 			if( node.left > 0 ) {
 				g_selection.push( findNode(node.left) )
 				g_highlight = node.left	
-				g_insertStage = "compare"
+				g_Stage = "compare"
 			} else {
-				g_insertStage = "insert"
+				g_Stage = "insert"
 			}
 		} else {
 			if( node.right > 0 ) {
 				g_selection.push( findNode(node.right) )
 				g_highlight = node.right
-				g_insertStage = "compare"
+				g_Stage = "compare"
 			} else {
-				g_insertStage = "insert"
+				g_Stage = "insert"
 			}
 		}
-	} else if (g_insertStage == "insert") {
-		g_insertStage = ""
+	} else if (g_Stage == "insert") {
+		g_Stage = ""
 		g_selection = [];
 		if( g_highlight == 0 ) {
 			node = findRootNode()
@@ -191,6 +229,166 @@ function goInsertNextStep() {
 	return true;
 }
 
+function goFindNextStep(value) {
+	if( g_tree.length == 0 || g_value != null)
+		return false;
+	
+	var node
+	if( g_Stage == "" || g_Stage == "compare" ) {
+		if( g_highlight == 0 ) {
+			node = findRootNode();
+		} else {
+			node = findNode(g_highlight);
+		}
+		g_highlight = node.id
+		g_selection.push( node )
+		g_Stage = "move"		
+	} else if (g_Stage == "move" ){
+		if( g_highlight == 0 ) {
+			node = findRootNode()
+		} else {
+			node = findNode(g_highlight);
+		}
+		g_selection = [];
+		if( node.value == value ) {
+			g_value = node
+			g_Stage = ""
+		}else if( node.value > value ) {
+			if( node.left > 0 ) {
+				g_selection.push( findNode(node.left) )
+				g_highlight = node.left	
+				g_Stage = "compare"
+			} else {
+				g_value = node
+				g_Stage = ""
+			}
+		} else {
+			if( node.right > 0 ) {
+				g_selection.push( findNode(node.right) )
+				g_highlight = node.right
+				g_Stage = "compare"
+			} else {
+				g_value = node
+				g_Stage = ""
+			}
+		}
+	}
+
+	return true;
+}
+
+function goPrintNextStep() {
+	if( g_tree.length == 0 || g_Stage == "" )
+		return false;
+	
+	var node
+	if( g_Stage == "compare" ) {
+		if( g_highlight == 0 ) {
+			node = findRootNode();
+		} else {
+			node = findNode(g_highlight);
+		}
+		g_selection = []
+		g_highlight = node.id
+		var leftChild = findNode(node.left)
+		var rightChild = findNode(node.right)
+		g_selection.push( node )
+		if( node.left != 0 && leftChild.print == false ) {
+			g_Stage = "move"
+		} else if( ( node.left == 0 || leftChild.print ) && node.print == false ) {
+			g_Stage = "print"
+		} else {
+			g_Stage = "move"
+		}
+	} else if (g_Stage == "move" ){
+		if( g_highlight == 0 ) {
+			node = findRootNode()
+		} else {
+			node = findNode(g_highlight);
+		}
+		g_selection = [];
+		
+		var leftChild = findNode(node.left)
+		var rightChild = findNode(node.right)
+		if( node.left != 0 && leftChild.print == false ) {
+			g_selection.push( leftChild )
+			g_highlight = node.left					
+		} else if( node.right == 0 || rightChild.print ) {			
+			var parentNode = findNode(node.parent)
+			if( node.parent > 0 ) {
+				g_selection.push( parentNode )
+				g_highlight = node.parent
+				node.print = true
+
+				if( !node.isLeftChild() ) {
+					parentNode.print = true
+				}
+			} else {
+				g_Stage = ""
+				return false;
+			}
+		} else if( rightChild.print == false ) {
+			g_selection.push( rightChild )
+			g_highlight = node.right
+		}
+		
+		g_Stage = "compare"
+	} else if( g_Stage == "print" ) {
+		node = findNode(g_highlight);
+		g_print_queue.push( node )
+		g_Stage = "move"	
+	}
+
+	return true;
+}
+
+function goDeleteNextStep(value) {
+	if( g_tree.length == 0 || g_Stage == "end" )
+		return false;
+	
+	var node
+	if( g_Stage == "" ) {
+		node = findRootNode();
+		if( node.value == value ) {
+			g_delete_left = findNode(node.left)
+			g_delete_right = findNode(node.right)
+			deleteRootNode()
+			
+			if( node.left == 0 && node.right == 0 )
+				g_Stage = "end"
+			else if( node.left != 0 && node.right != 0 ) {
+				g_delete_left.parent = 0				
+				g_value = findMax(g_delete_left)
+				g_Stage = "merge"
+			} else
+				g_Stage = "merge"
+		} else {
+			g_Stage = "end"
+		}
+	} else if (g_Stage == "merge" ){
+		if( g_delete_right == null )
+		{
+			g_delete_left.parent = 0
+			g_Stage = "end"
+			resizeTree()
+		} else if( g_delete_left == null ) {
+			g_delete_right.parent = 0
+			g_Stage = "end"
+			resizeTree()
+		} else {			
+			if( splayUp( g_value ) == false ) {
+				g_value.parent = 0
+				g_value.right = g_delete_right.id
+				g_delete_right.parent = g_value.id
+				g_Stage = "end"
+				resizeTree()
+			}
+		}
+	}
+
+	return true;
+}
+
 function findRootNode() {
 	var ret = null;
 	g_tree.forEach( (node) => {
@@ -209,6 +407,22 @@ function findNode(idx) {
 	})
 
 	return ret;
+}
+
+function deleteRootNode() {
+	g_tree.forEach( (node, idx) => {
+		if( node.parent == 0 )
+			g_tree.splice(idx, 1)
+	})
+}
+
+function findMax(tree) {
+	var maxNode = tree
+	while( maxNode.right != 0 ) {
+		maxNode = findNode(maxNode.right)
+	}
+
+	return maxNode
 }
 
 function setNewPosition(tree, xPos, yPos, side) {
@@ -269,6 +483,11 @@ function play() {
 			document.getElementById("toolbar_find").disabled = false
 			document.getElementById("toolbar_print").disabled = false
 		}
+
+		if( !ret ) {
+			g_value = null
+		}
+
 	}, aniSpeed);
 }
 
@@ -459,7 +678,7 @@ function doubleRotateRight(tree)
 	if (t3 != null)
 	{
 		t3.parent = C.id;
-		C.left = t2.id;
+		C.left = t3.id;
 	}
 	if (C.parent == 0)
 	{
@@ -513,7 +732,7 @@ function doubleRotateLeft(tree)
 	if (t3 != null)
 	{
 		t3.parent = C.id;
-		C.left = t2.id;
+		C.left = t3.id;
 	}
 		
 	if (A.parent == 0)
@@ -553,7 +772,7 @@ function doubleRotateLeft(tree)
 
 function splayUp(tree) {
 	var ret = true
-	if (tree.parent == 0)
+	if (tree == null || tree.parent == 0)
 	{
 		return false;
 	}
@@ -647,12 +866,28 @@ function onPlay() {
 
 function onStepForward () {
 	var ret = false
+	var val = document.getElementById("inNumber").value;
 	
-	ret = goInsertNextStep()
+	if( g_command == "insert" ) {
+		ret = goInsertNextStep()
+	} else if( g_command == "delete" ) {
+		if( val != '' )
+			ret = goFindNextStep(val)
+	} else if( g_command == "find" ) {
+		if( val != '' )
+			ret = goFindNextStep(val)
+	} else if( g_command == "print" ) {
+		ret = goPrintNextStep()
+	}
 
 	if( ret == false ) {
 		//goNext
 		ret = splayUp(g_value)
+	}
+
+	if( g_command == "delete" && ret == false ) {
+		if( val != '' )
+			ret = goDeleteNextStep(val)
 	}
 
 	updateSvg()
@@ -716,7 +951,7 @@ function updateSvg() {
 
     updateNode.select("circle")
         .attr("stroke", function(d) { 
-        	if (g_insertStage == "move") {
+        	if (g_Stage == "move") {
         		if( d.id == g_highlight || d.parent == -1 ) {
         			return "red"
         		}
@@ -725,10 +960,16 @@ function updateSvg() {
         	return "white"
         });
 
+	updateNode.select(".textcircle")
+		.text(function(d) { return d.value })
+
     updateNode.select(".unlink, .link")
     	.attr("class", function(d) {
     		if( d.parent == 0 || d.parent == -1 ) 
         		return "unlink"
+			if( findNode(d.parent) == null ) {
+				return "unlink"
+			}
         	return "link"
     	})    	
         .attr("x1",function(d)  {
@@ -744,6 +985,8 @@ function updateSvg() {
         	}
 			
 			var parentNode = findNode(parent);
+			if( parentNode == null )
+				return d.x
 			var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
         	return dot[0]
         })
@@ -759,7 +1002,9 @@ function updateSvg() {
 	        	parent = g_highlight
         	}
         	var parentNode = findNode(parent);
-
+			if( parentNode == null )
+				return d.x
+		
         	var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
         	return dot[1]
         })
@@ -775,7 +1020,9 @@ function updateSvg() {
 	        	parent = g_highlight
         	}
         	var parentNode = findNode(parent);
-
+			if( parentNode == null )
+				return d.x
+		
         	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
         	return dot[0]
         })
@@ -791,7 +1038,9 @@ function updateSvg() {
 	        	parent = g_highlight
         	}
         	var parentNode = findNode(parent);
-
+			if( parentNode == null )
+				return d.x
+		
         	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
         	return dot[1]
         })
@@ -810,7 +1059,7 @@ function updateSvg() {
 
     //////////////////////////////////////////
     var selection = g_Node.selectAll(".selection").data(g_selection);
-
+	
     selection.exit().remove();//remove unneeded circles
     var node = selection.enter()
     				.append("circle")
@@ -827,12 +1076,37 @@ function updateSvg() {
         .attr("cx", function(d) { return d.x})
         .attr("cy", function(d) { return d.y})
         .attr("stroke", function(d) {
-        	if (g_insertStage == "move") {
+        	if (g_Stage == "move") {
         		return "red"
         	} else {
         		return "red"
         	}
         })
 
+	updatePrint()
 }
 
+function updatePrint() {
+	//rejoin data
+    var nodes = g_Node.selectAll(".print").data(g_print_queue);
+    
+	nodes.exit().remove();//remove unneeded circles
+    var node = nodes.enter()
+			.append("text")
+			.attr('class', 'print')
+			.attr('text-anchor', 'middle')
+			.attr("x", function(d) { return d.x })
+			.attr("y", function(d) { return d.y + 5 })
+			.text(function(d) { return d.value })
+
+	var aniSpeed = document.getElementById("animation_speed").value
+    //update all circles to new positions
+    nodes.transition()
+        .duration(aniSpeed / 2)
+        .attr("x", function(d, i) { 
+        	return PRINT_POS_X + PRINT_HORIZONTAL_GAP * (i % 10)
+        })
+		.attr("y", function(d, i) { 
+        	return g_printY + PRINT_VERTICAL_GAP * parseInt(i / 10)
+        });
+}
