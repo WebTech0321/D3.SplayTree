@@ -79,7 +79,7 @@ input[type=button]:disabled {
 
 .circle {
 	fill: #7060E0;
-	stroke-width: 1;
+	stroke-width: 2;
 }
 .textcircle {
 	text-anchor: middle;
@@ -93,8 +93,7 @@ input[type=button]:disabled {
 
 .selection {
 	fill: none;	
-	stroke-width: 3;
-	stroke: tomato;
+	stroke-width: 2;
 }
 
 </style>
@@ -103,10 +102,10 @@ input[type=button]:disabled {
 	<div id="title"> <h1>SPLAY TREE</h1></div>
 	<div id="toolbar"> 
 		<input id="inNumber" type="number" min="0" max="9999" maxlength="4" />
-		<input type="button" class="btn_green" value="Insert" onclick="onInsert()">
-		<input type="button" class="btn_red" value="Delete" onclick="onDelete()">
-		<input type="button" class="btn_green" value="Find" onclick="onFind()">
-		<input type="button" class="btn_green" value="Print" onclick="onPrint()">
+		<input id="toolbar_insert" type="button" class="btn_green" value="Insert" onclick="onInsert()">
+		<input id="toolbar_delete" type="button" class="btn_red" value="Delete" onclick="onDelete()">
+		<input id="toolbar_find" type="button" class="btn_green" value="Find" onclick="onFind()">
+		<input id="toolbar_print" type="button" class="btn_green" value="Print" onclick="onPrint()">
 	</div>
 	<div id="control" style="order: 1"> 
 		<input id="control_skipback" type="button" class="btn_blue" value="Skip Back">
@@ -115,8 +114,8 @@ input[type=button]:disabled {
 		<input id="control_stepforward" type="button" class="btn_blue" value="Step Forward"  onclick="onStepForward()">
 		<input id="control_skipforward" type="button" class="btn_blue" value="Skip Forward">
 
-		<span>Animation Speed: <span id="animation_speed_val" >1000</span></span>
-  		<input type="range" id="animation_speed" min="100" max="2000" value="1000" step="100" onchange="onChangeSpeed()">
+		<span>Animation Speed: <span id="animation_speed_val" >800</span></span>
+  		<input type="range" id="animation_speed" min="100" max="2000" value="800" step="100" onchange="onChangeSpeed()">
 
   		<input id="svg_width" type="number" min="100" max="2000" maxlength="4" value="800"/>
   		<input id="svg_height" type="number" min="100" max="2000" maxlength="4"  value="400"/>

@@ -11,7 +11,7 @@ var g_startY = g_yStep;
 var g_insertStage = "compare";		//"compare", "move", "insert"
 var g_highlight = 0;
 var g_value = null;
-var g_isPlaying = false;
+var g_isPlaying = true;
 
 // parent id : 0  : root
 //			  -1 : new node
@@ -30,11 +30,11 @@ function Node(id, val, x, y)
 
 Node.prototype.isLeftChild = function()		
 {
-	if (this.parent == null)
+	if (this.parent == 0)
 	{
 		return true;
 	}
-	return this.parent.left == this;	
+	return findNode(this.parent).left == this.id;	
 }
 
 window.onload = function() {
@@ -51,7 +51,7 @@ window.onload = function() {
 		}
 	}
 
-	onPlay();
+	setPlayButtons()
 }
 
 function onChangeCanvasSize () {
@@ -74,6 +74,44 @@ function onChangeSpeed () {
 	document.getElementById("animation_speed_val").innerHTML = document.getElementById("animation_speed").value;
 }
 
+function onInsert(){
+	var val = document.getElementById("inNumber").value;
+	if( val == '' )
+		return;
+
+	if( g_tree.length == 0 ) {
+		g_value = new Node(g_index++, +val, g_startX, g_startY)
+		g_value.parent = 0;
+		g_tree.push(g_value)
+	} else {
+		g_value = new Node(g_index++, +val, g_diameter * 2, g_diameter * 2)
+		g_tree.push(g_value)
+	}
+
+	g_highlight = 0;
+	g_insertStage = "";
+
+	updateSvg();
+
+	if( g_isPlaying )
+		play();
+}
+
+
+function onDelete(){
+	g_highlight = 0;
+}
+
+
+function onFind(){
+	g_highlight = 0;
+}
+
+
+function onPrint(){
+	g_highlight = 0;
+}
+
 function goInsertNextStep() {
 	if( g_tree.length == 0 )
 		return false;
@@ -81,8 +119,7 @@ function goInsertNextStep() {
 		return false;
 
 	var node
-	if( g_insertStage == "" || g_insertStage == "insert" ) {
-		g_insertStage = "compare"
+	if( g_insertStage == "" || g_insertStage == "compare" ) {
 		if( g_highlight == 0 ) {
 			node = findRootNode();
 		} else {
@@ -90,9 +127,8 @@ function goInsertNextStep() {
 		}
 		g_highlight = node.id
 		g_selection.push( node )
-	} else if (g_insertStage == "compare" ){
-		g_insertStage = "move"
-
+		g_insertStage = "move"		
+	} else if (g_insertStage == "move" ){
 		if( g_highlight == 0 ) {
 			node = findRootNode()
 		} else {
@@ -100,14 +136,24 @@ function goInsertNextStep() {
 		}
 		g_selection = [];
 		if( node.value > g_value.value ) {
-			if( node.left > 0 )
+			if( node.left > 0 ) {
 				g_selection.push( findNode(node.left) )
+				g_highlight = node.left	
+				g_insertStage = "compare"
+			} else {
+				g_insertStage = "insert"
+			}
 		} else {
-			if( node.right > 0 )
+			if( node.right > 0 ) {
 				g_selection.push( findNode(node.right) )
+				g_highlight = node.right
+				g_insertStage = "compare"
+			} else {
+				g_insertStage = "insert"
+			}
 		}
-	} else if (g_insertStage == "move") {		
-		g_insertStage = "insert"
+	} else if (g_insertStage == "insert") {
+		g_insertStage = ""
 		g_selection = [];
 		if( g_highlight == 0 ) {
 			node = findRootNode()
@@ -163,44 +209,6 @@ function findNode(idx) {
 	return ret;
 }
 
-function onInsert(){
-	var val = document.getElementById("inNumber").value;
-	if( val == '' )
-		return;
-
-	if( g_tree.length == 0 ) {
-		g_value = new Node(g_index++, +val, g_startX, g_startY)
-		g_value.parent = 0;
-		g_tree.push(g_value)
-	} else {
-		g_value = new Node(g_index++, +val, g_diameter * 2, g_diameter * 2)
-		g_tree.push(g_value)
-	}
-
-	g_highlight = 0;
-	g_insertStage = "";
-
-	updateSvg();
-
-	if( g_isPlaying )
-		play();
-}
-
-
-function onDelete(){
-	g_highlight = 0;
-}
-
-
-function onFind(){
-	g_highlight = 0;
-}
-
-
-function onPrint(){
-	g_highlight = 0;
-}
-
 function setNewPosition(tree, xPos, yPos, side) {
 	if( tree == null )
 		return;
@@ -245,17 +253,347 @@ function resizeWidths(tree)
 
 function play() {
 	var aniSpeed = document.getElementById("animation_speed").value
+	document.getElementById("toolbar_insert").disabled = true
+	document.getElementById("toolbar_delete").disabled = true
+	document.getElementById("toolbar_find").disabled = true
+	document.getElementById("toolbar_print").disabled = true
 	setTimeout(function() {
 		var ret = onStepForward()
 		if( g_isPlaying && ret ) {
 			play()
+		} else {
+			document.getElementById("toolbar_insert").disabled = false
+			document.getElementById("toolbar_delete").disabled = false
+			document.getElementById("toolbar_find").disabled = false
+			document.getElementById("toolbar_print").disabled = false
 		}
 	}, aniSpeed);
 }
 
-function onPlay() {
-	g_isPlaying = !g_isPlaying
 
+
+function singleRotateRight(tree)
+{
+	console.log("singleRotateRight")
+	var B = tree;
+	var t3 = findNode(B.right);
+	var A = findNode(tree.left);
+	var t1 = findNode(A.left);
+	var t2 = findNode(A.right);
+	
+	if (t2 != null)
+	{
+		t2.parent = B.id;
+	}
+	
+	A.parent = B.parent;	
+	if (B.parent != 0)
+	{
+		if (B.isLeftChild())
+		{
+			findNode(B.parent).left = A.id;
+		}
+		else
+		{
+			findNode(B.parent).right = A.id;
+		}
+	}
+	A.right = B.id;
+	B.parent = A.id;
+	if( t2 == null)
+		B.left = 0
+	else
+		B.left = t2.id;
+	
+
+	resizeTree();			
+}
+
+function singleRotateLeft(tree)
+{
+	console.log("singleRotateLeft")
+	var A = tree;
+	var B = findNode(tree.right);
+	var t1 = findNode(A.left);
+	var t2 = findNode(B.left);	
+	var t3 = findNode(B.right);
+		
+	if (t2 != null)
+	{
+		t2.parent = A.id;
+	}
+	
+	B.parent = A.parent;
+	if (A.parent != 0)
+	{
+		if (A.isLeftChild())
+		{
+			findNode(A.parent).left = B.id;
+		}
+		else
+		{
+			findNode(A.parent).right = B.id;
+		}
+	}
+
+	B.left = A.id;
+	A.parent = B.id;
+	if( t2 == null ) 
+		A.right = 0;
+	else
+		A.right = t2.id;
+	
+	resizeTree();			
+}
+
+function zigZigRight(tree)
+{
+	console.log("zigZigRight")
+	var C = tree;
+	var B = findNode(tree.left);
+	var A = findNode(B.left);
+	var t2 = findNode(A.right);
+	var t3 = findNode(B.right);
+	
+	if (C.parent != 0)
+	{
+		var CParent = findNode(C.parent)
+		if (C.isLeftChild())
+		{
+			CParent.left = A.id;
+		}
+		else
+		{
+			CParent.right = A.id;
+		}
+	}
+		
+	if (t2 != null)
+	{
+		t2.parent = B.id
+	}
+	if (t3 != null)
+	{
+		t3.parent = C.id
+	}
+	
+	A.right = B.id
+	A.parent = C.parent
+	B.parent = A.id
+	if( t2 == null)
+		B.left = 0
+	else
+		B.left = t2.id
+	B.right = C.id;
+	C.parent = B.id;
+	if ( t3 == null )
+		C.left = 0
+	else
+		C.left = t3.id;
+	resizeTree();			
+}
+
+
+function zigZigLeft(tree)
+{
+	console.log("zigZigLeft")
+	var A = tree;
+	var B = findNode(tree.right);
+	var C = findNode(B.right);
+	var t2 = findNode(B.left);
+	var t3 = findNode(C.left);
+		
+	if (A.parent != 0)
+	{
+		var AParent = findNode(A.parent)
+		if (A.isLeftChild())
+		{
+			AParent.left = C.id;
+		}
+		else
+		{
+			AParent.right = C.id;
+		}
+	}
+	
+	if (t2 != null)
+	{
+		t2.parent = A.id;
+	}
+	if (t3 != null)
+	{
+		t3.parent = B.id;
+	}
+	
+	C.parent = A.parent;
+	if( t2 == null )
+		A.right = 0
+	else
+		A.right = t2.id;
+	B.left = A.id;
+	A.parent = B.id;
+	if( t3 == null )
+		B.right = 0
+	else
+		B.right = t3.id;
+	C.left = B.id;
+	B.parent = C.id;
+	
+	resizeTree();
+}
+
+function doubleRotateRight(tree)
+{
+	console.log("doubleRotateRight")
+	var A = findNode(tree.left);
+	var B = findNode(A.right);
+	var C = tree;
+	var t2 = findNode(B.left);
+	var t3 = findNode(B.right);
+	
+	if (t2 != null)
+	{
+		t2.parent = A.id;
+		A.right = t2.id;
+	}
+	if (t3 != null)
+	{
+		t3.parent = C.id;
+		C.left = t2.id;
+	}
+	if (C.parent == 0)
+	{
+		B.parent = 0;
+	}
+	else
+	{
+		var CParent = findNode(C.parent)
+		if (C.isLeftChild())
+		{
+			CParent.left = B.id
+		}
+		else
+		{
+			CParent.right = B.id
+		}
+		B.parent = C.parent;
+		C.parent = B.id;
+	}
+	
+	B.left = A.id;
+	A.parent = B.id;
+	B.right=C.id;
+	C.parent=B.id;
+	if( t2 == null )
+		A.right = 0
+	else
+		A.right=t2.id;
+	if( t3 == null )
+		C.left = 0
+	else
+		C.left = t3.id;
+	
+	resizeTree();
+}
+
+function doubleRotateLeft(tree)
+{
+	console.log("doubleRotateLeft")
+	var A = tree
+	var C = findNode(tree.right)
+	var B = findNode(C.left)
+	var t2 = findNode(B.left)
+	var t3 = findNode(B.right)
+		
+	if (t2 != null)
+	{
+		t2.parent = A.id
+		A.right = t2.id
+	}
+	if (t3 != null)
+	{
+		t3.parent = C.id;
+		C.left = t2.id;
+	}
+		
+	if (A.parent == 0)
+	{
+		B.parent = 0
+	}
+	else
+	{
+		var AParent = findNode(A.parent)
+		if (A.isLeftChild())
+		{
+			AParent.left = B.id
+		}
+		else
+		{
+			AParent.right = B.id;
+		}
+		B.parent = A.parent;
+		A.parent = B.id;		
+	}
+	
+	B.left = A.id;
+	A.parent = B.id;
+	B.right=C.id;
+	C.parent=B.id;
+	if( t2 == null )
+		A.right = 0
+	else
+		A.right=t2.id
+	if( t3 == null )
+		C.left = 0
+	else
+		C.left = t3.id
+	
+	resizeTree();	
+}
+
+function splayUp(tree) {
+	if (tree.parent == 0)
+	{
+		return false;
+	}
+	else {
+		var parentNode = findNode(tree.parent)
+
+		if (parentNode.parent == 0)
+		{
+			if (tree.isLeftChild())
+			{
+				singleRotateRight(parentNode);
+				
+			}
+			else
+			{
+				singleRotateLeft(parentNode);
+			}
+			return false;
+		}
+		else if (tree.isLeftChild() && !parentNode.isLeftChild())
+		{
+			doubleRotateLeft(findNode(parentNode.parent));
+		}
+		else if (!tree.isLeftChild() && parentNode.isLeftChild())
+		{
+			doubleRotateRight(findNode(parentNode.parent));
+		}
+		else if (tree.isLeftChild())
+		{		
+			zigZigRight(findNode(parentNode.parent));
+		}
+		else
+		{
+			zigZigLeft(findNode(parentNode.parent));
+		}
+	}
+	
+	return true;
+}
+
+function setPlayButtons() {
 	if( g_isPlaying ) {
 		document.getElementById("control_stepback").disabled = true;
 		document.getElementById("control_stepforward").disabled = true;
@@ -269,6 +607,12 @@ function onPlay() {
 
 		document.getElementById("control_play").value = "Play";		
 	}
+}
+
+function onPlay() {
+	g_isPlaying = !g_isPlaying
+
+	setPlayButtons()
 	play();
 }
 
@@ -277,6 +621,7 @@ function onStepForward () {
 
 	if( ret == false ) {
 		//goNext
+		ret = splayUp(g_value)
 	}
 
 	updateSvg()
@@ -340,7 +685,7 @@ function updateSvg() {
 
     updateNode.select("circle")
         .attr("stroke", function(d) { 
-        	if (g_insertStage == "compare") {
+        	if (g_insertStage == "move") {
         		if( d.id == g_highlight || d.parent == -1 ) {
         			return "red"
         		}
@@ -366,9 +711,9 @@ function updateSvg() {
 
 	        	parent = g_highlight
         	}
-        	var parentNode = findNode(parent);
-
-        	var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
+			
+			var parentNode = findNode(parent);
+			var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
         	return dot[0]
         })
         .attr("y1",function(d) {
@@ -438,6 +783,13 @@ function updateSvg() {
         .attr("visibility", "visible")
         .attr("cx", function(d) { return d.x})
         .attr("cy", function(d) { return d.y})
+        .attr("stroke", function(d) {
+        	if (g_insertStage == "move") {
+        		return "red"
+        	} else {
+        		return "red"
+        	}
+        })
 
 }
 
