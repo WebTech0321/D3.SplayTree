@@ -9,7 +9,9 @@ var g_yStep = 50
 var g_startX = 0;
 var g_startY = g_yStep;
 var g_insertStage = "compare";		//"compare", "move", "insert"
+var g_splayStage = "mark_arrow";		//"mark_arrow", "move"
 var g_highlight = 0;
+var g_highlight_arrow = [0, 0];
 var g_value = null;
 var g_isPlaying = true;
 
@@ -269,8 +271,6 @@ function play() {
 		}
 	}, aniSpeed);
 }
-
-
 
 function singleRotateRight(tree)
 {
@@ -552,6 +552,7 @@ function doubleRotateLeft(tree)
 }
 
 function splayUp(tree) {
+	var ret = true
 	if (tree.parent == 0)
 	{
 		return false;
@@ -562,35 +563,63 @@ function splayUp(tree) {
 		if (parentNode.parent == 0)
 		{
 			if (tree.isLeftChild())
-			{
-				singleRotateRight(parentNode);
-				
+			{			
+				if( g_splayStage == "mark_arrow" ) {
+					g_highlight_arrow[0] = tree.id
+				} else {
+					singleRotateRight(parentNode);
+				}
 			}
 			else
 			{
-				singleRotateLeft(parentNode);
+				if( g_splayStage == "mark_arrow" ) {
+					g_highlight_arrow[0] = tree.id
+				} else {
+					singleRotateLeft(parentNode);
+				}
 			}
-			return false;
 		}
 		else if (tree.isLeftChild() && !parentNode.isLeftChild())
 		{
-			doubleRotateLeft(findNode(parentNode.parent));
+			if( g_splayStage == "mark_arrow" ) {
+				g_highlight_arrow[0] = tree.id
+				g_highlight_arrow[1] = parentNode.id
+			} else
+				doubleRotateLeft(findNode(parentNode.parent));
 		}
 		else if (!tree.isLeftChild() && parentNode.isLeftChild())
 		{
-			doubleRotateRight(findNode(parentNode.parent));
+			if( g_splayStage == "mark_arrow" ) {
+				g_highlight_arrow[0] = tree.id
+				g_highlight_arrow[1] = parentNode.id
+			} else
+				doubleRotateRight(findNode(parentNode.parent));
 		}
 		else if (tree.isLeftChild())
 		{		
-			zigZigRight(findNode(parentNode.parent));
+			if( g_splayStage == "mark_arrow" ) {
+				g_highlight_arrow[0] = tree.id
+				g_highlight_arrow[1] = parentNode.id
+			} else
+				zigZigRight(findNode(parentNode.parent));
 		}
 		else
 		{
-			zigZigLeft(findNode(parentNode.parent));
+			if( g_splayStage == "mark_arrow" ) {
+				g_highlight_arrow[0] = tree.id
+				g_highlight_arrow[1] = parentNode.id
+			} else
+				zigZigLeft(findNode(parentNode.parent));
 		}
 	}
-	
-	return true;
+	if( g_splayStage == "mark_arrow" ) {
+		g_splayStage = "move"
+	}else if( g_splayStage == "move" ) {
+		g_splayStage = "mark_arrow"
+		g_highlight_arrow[0] = 0
+		g_highlight_arrow[1] = 0
+	}
+	return ret;
 }
 
 function setPlayButtons() {
@@ -617,7 +646,9 @@ function onPlay() {
 }
 
 function onStepForward () {
-	var ret = goInsertNextStep()
+	var ret = false
+	
+	ret = goInsertNextStep()
 
 	if( ret == false ) {
 		//goNext
@@ -764,6 +795,18 @@ function updateSvg() {
         	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
         	return dot[1]
         })
+    	.attr("marker-end", function(d) { 
+			if( d.id == g_highlight_arrow[0] || d.id == g_highlight_arrow[1] ) {
+				return "url(#arrow_red)"
+			}
+			return "url(#arrow)"
+		})    
+		.attr("stroke", function(d) { 
+			if( d.id == g_highlight_arrow[0] || d.id == g_highlight_arrow[1] ) {
+				return "red"
+			}
+			return "#383070"
+        });
 
     //////////////////////////////////////////
     var selection = g_Node.selectAll(".selection").data(g_selection);
@@ -778,7 +821,7 @@ function updateSvg() {
 			        .attr("visibility", "hidden")
 
     //update all circles to new positions
-    var updateSelection = selection.transition()
+    selection.transition()
         .duration(aniSpeed / 2)
         .attr("visibility", "visible")
         .attr("cx", function(d) { return d.x})
