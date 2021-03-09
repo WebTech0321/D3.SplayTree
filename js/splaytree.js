@@ -20,6 +20,11 @@ var g_print_queue = [];
 var g_delete_left = null;
 var g_delete_right = null;
 
+var g_Track = [];
+var g_currentTrackIdx = 0;
+var g_Step = [];
+var g_currentStepIdx = 0;
+
 const PRINT_POS_X  = 20;
 const PRINT_VERTICAL_GAP  = 20;
 const PRINT_HORIZONTAL_GAP = 40;
@@ -49,6 +54,16 @@ Node.prototype.isLeftChild = function()
 	return findNode(this.parent).left == this.id;	
 }
 
+Object.prototype.clone = function() {
+	var newObj = (this instanceof Array) ? [] : {};
+	for (i in this) {
+	  if (i == 'clone') continue;
+	  if (this[i] && typeof this[i] == "object") {
+		newObj[i] = this[i].clone();
+	  } else newObj[i] = this[i]
+	} return newObj;
+  };
+
 window.onload = function() {
 
 	svgTree = d3.select("#d3-splaytree")
@@ -66,6 +81,8 @@ window.onload = function() {
 	}
 
 	setPlayButtons()
+	
+	saveCurrentTrack()
 }
 
 function onChangeCanvasSize () {
@@ -97,6 +114,16 @@ function onInsert(){
 	if( val == '' )
 		return;
 
+	g_Step = []
+	g_currentStepIdx = 0
+	setFunctionButtons( true )	
+	g_highlight = 0;
+	g_command = "insert"
+	g_Stage = "";	
+	document.getElementById("control_stepforward").disabled = false
+	
+	saveCurrentStep()
+
 	if( g_tree.length == 0 ) {
 		g_value = new Node(g_index++, +val, g_startX, g_startY)
 		g_value.parent = 0;
@@ -106,9 +133,6 @@ function onInsert(){
 		g_tree.push(g_value)
 	}
 
-	g_highlight = 0;
-	g_command = "insert"
-	g_Stage = "";	
 
 	updateSvg();
 
@@ -118,9 +142,14 @@ function onInsert(){
 
 
 function onDelete(){
+
 	g_highlight = 0;
 	g_command = "delete"
 	g_Stage = "";
+	g_Step = []
+	g_currentStepIdx = 0
+	document.getElementById("control_stepforward").disabled = false
+	setFunctionButtons( true )
 
 	if( g_isPlaying )
 		play();
@@ -128,10 +157,15 @@ function onDelete(){
 
 
 function onFind(){
+
 	g_highlight = 0;
 	g_command = "find"
 	g_Stage = "";	
 	g_value = null
+	g_Step = []
+	g_currentStepIdx = 0
+	document.getElementById("control_stepforward").disabled = false
+	setFunctionButtons( true )
 	
 	if( g_isPlaying )
 		play();
@@ -139,10 +173,15 @@ function onFind(){
 
 
 function onPrint(){
+
 	g_highlight = 0;
 	g_command = "print"
 	g_Stage = "compare";
 	g_print_queue = []
+	g_Step = []
+	g_currentStepIdx = 0
+	document.getElementById("control_stepforward").disabled = false
+	setFunctionButtons( true )
 
 	g_tree.map((item) => {
 		item.print = false
@@ -469,19 +508,10 @@ function resizeWidths(tree)
 
 function play() {
 	var aniSpeed = document.getElementById("animation_speed").value
-	document.getElementById("toolbar_insert").disabled = true
-	document.getElementById("toolbar_delete").disabled = true
-	document.getElementById("toolbar_find").disabled = true
-	document.getElementById("toolbar_print").disabled = true
 	setTimeout(function() {
 		var ret = onStepForward()
 		if( g_isPlaying && ret ) {
 			play()
-		} else {
-			document.getElementById("toolbar_insert").disabled = false
-			document.getElementById("toolbar_delete").disabled = false
-			document.getElementById("toolbar_find").disabled = false
-			document.getElementById("toolbar_print").disabled = false
 		}
 
 		if( !ret ) {
@@ -841,17 +871,30 @@ function splayUp(tree) {
 	return ret;
 }
 
+
+function setFunctionButtons( disabled ) {	
+	document.getElementById("toolbar_insert").disabled = disabled
+	document.getElementById("toolbar_delete").disabled = disabled
+	document.getElementById("toolbar_find").disabled = disabled
+	document.getElementById("toolbar_print").disabled = disabled
+}
+
 function setPlayButtons() {
 	if( g_isPlaying ) {
-		document.getElementById("control_stepback").disabled = true;
+		document.getElementById("control_stepback").disabled = true;		
 		document.getElementById("control_stepforward").disabled = true;
+
 		document.getElementById("control_skipforward").disabled = true;
 
 		document.getElementById("control_play").value = "Pause";		
 	} else {
-		document.getElementById("control_stepback").disabled = false;
+		if( g_currentStepIdx > 0 )
+			document.getElementById("control_stepback").disabled = false;
+		
 		document.getElementById("control_stepforward").disabled = false;
-		document.getElementById("control_skipforward").disabled = false;
+
+		if( g_currentTrackIdx > 0 )
+			document.getElementById("control_skipforward").disabled = false;		
 
 		document.getElementById("control_play").value = "Play";		
 	}
@@ -864,10 +907,125 @@ function onPlay() {
 	play();
 }
 
+function saveCurrentStep() {
+	g_Step.push({
+		tree: g_tree.clone(),
+		selection: g_selection.clone(),
+		stage: g_Stage,
+		splayStage: g_splayStage,
+		highlight: g_highlight,
+		highlight_arrow: [...g_highlight_arrow],
+		value: g_value ? g_value.id : 0,
+		print_queue: g_print_queue.clone()
+	})
+
+	g_currentStepIdx++
+}
+
+function loadPrevStep() {
+	if( g_currentStepIdx == 0)
+		return
+		
+	var current = g_Step.pop()
+	
+	g_tree = current.tree
+	g_selection = current.selection
+	g_Stage = current.stage
+	g_splayStage = current.splayStage
+	g_highlight = current.highlight
+	g_highlight_arrow = current.highlight_arrow
+	g_value = current.value == 0 ? null : findNode(current.value)
+	g_print_queue = current.print_queue
+
+	g_currentStepIdx--
+}
+
+function saveCurrentTrack() {
+	g_Track = g_Track.slice(0, g_currentTrackIdx + 1)
+
+	g_Track.push({
+		tree: g_tree.clone(),
+		selection: g_selection.clone(),
+		stage: g_Stage,
+		splayStage: g_splayStage,
+		highlight: g_highlight,
+		highlight_arrow: [...g_highlight_arrow],
+		value: g_value ? g_value.id : 0,
+		print_queue: g_print_queue.clone()
+	})
+
+	g_currentTrackIdx++
+}
+
+function loadPrevTrack() {
+	if( g_currentTrackIdx == 0)
+		return
+		
+	g_currentTrackIdx--
+
+	var current = g_Track[g_currentTrackIdx]
+	g_tree = current.tree.clone()
+	g_selection = current.selection.clone()
+	g_Stage = current.stage
+	g_splayStage = current.splayStage
+	g_highlight =  current.highlight
+	g_highlight_arrow = [...current.highlight_arrow]
+	g_value = current.value == 0 ? null : findNode(current.value)
+	g_print_queue = current.print_queue.clone()
+}
+
+function goNextTrack() {
+	if( g_currentTrackIdx < g_Track.length - 1 ) {
+		g_currentTrackIdx++
+
+		var current = g_Track[g_currentTrackIdx]
+		g_tree = current.tree.clone()
+		g_selection = current.selection.clone()
+		g_Stage = current.stage
+		g_splayStage = current.splayStage
+		g_highlight =  current.highlight
+		g_highlight_arrow = [...current.highlight_arrow]
+		g_value = current.value == 0 ? null : findNode(current.value)
+		g_print_queue = current.print_queue.clone()
+	}
+}
+
+function onSkipBack() {
+	if( g_currentTrackIdx > 0 ) {
+		loadPrevTrack()
+		updateSvg()		
+		document.getElementById("control_skipforward").disabled = false	
+	}
+
+	setFunctionButtons( false )
+	if( g_currentTrackIdx == 0 )
+		document.getElementById("control_skipback").disabled = true
+	else
+		document.getElementById("control_skipback").disabled = false
+
+}
+
+function onSkipForward() {
+	if( g_currentTrackIdx < g_Track.length - 1 ) {
+		goNextTrack()
+		updateSvg()	
+	}
+
+	setFunctionButtons( false )
+	if( g_currentTrackIdx == g_Track.length - 1 )
+		document.getElementById("control_skipforward").disabled = true
+	
+	document.getElementById("control_skipback").disabled = false
+}
+
 function onStepForward () {
 	var ret = false
 	var val = document.getElementById("inNumber").value;
 	
+	saveCurrentStep()
+	if( !g_isPlaying )
+		document.getElementById("control_stepback").disabled = false
+
 	if( g_command == "insert" ) {
 		ret = goInsertNextStep()
 	} else if( g_command == "delete" ) {
@@ -892,7 +1050,32 @@ function onStepForward () {
 
 	updateSvg()
 
+	if( !ret ) {		
+		
+		document.getElementById("control_stepback").disabled = false
+		document.getElementById("control_stepforward").disabled = true
+		document.getElementById("control_skipback").disabled = false
+
+		saveCurrentTrack()
+		setFunctionButtons( false )
+	}
+
 	return ret;
+}
+
+function onStepBack() {
+	if( g_currentStepIdx > 0 ) {
+		loadPrevStep()
+		updateSvg()	
+	}
+
+	setFunctionButtons( true )
+	document.getElementById("control_stepforward").disabled = false
+	if( !g_isPlaying && g_currentStepIdx == 0 ) {
+		document.getElementById("control_stepback").disabled = true
+		document.getElementById("control_stepforward").disabled = true
+		setFunctionButtons( false )
+	}
 }
 
 function calcLineXY(x1, y1, x2, y2, r) {
@@ -915,12 +1098,92 @@ function updateSvg() {
     				.attr('class', 'node')
 
     var links = node.append("line")
-    	.attr("class", "unlink")
-    	.attr("marker-end", "url(#arrow)")    	
+    	/*.attr("class", "unlink")	
         .attr("x1",function(d)  { return d.x })
         .attr("y1",function(d) { return d.y })
         .attr("x2",function(d) { return d.x })
-        .attr("y2",function(d) { return d.y })
+        .attr("y2",function(d) { return d.y })*/
+    	.attr("class", function(d) {
+    		if( d.parent == 0 || d.parent == -1 ) 
+        		return "unlink"
+			if( findNode(d.parent) == null ) {
+				return "unlink"
+			}
+        	return "link"
+    	})    	
+        .attr("x1",function(d)  {
+        	if( d.parent == 0 )
+        		return d.x
+
+        	var parent = d.parent;
+        	if( d.parent == -1 ) {
+        		if( g_highlight == 0 )
+	        		return d.x
+
+	        	parent = g_highlight
+        	}
+			
+			var parentNode = findNode(parent);
+			if( parentNode == null )
+				return d.x
+			var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
+        	return dot[0]
+        })
+        .attr("y1",function(d) {
+        	if( d.parent == 0 )
+        		return d.y
+
+        	var parent = d.parent;
+        	if( d.parent == -1 ) {
+        		if( g_highlight == 0 )
+	        		return d.y
+
+	        	parent = g_highlight
+        	}
+        	var parentNode = findNode(parent);
+			if( parentNode == null )
+				return d.x
+		
+        	var dot = calcLineXY(parentNode.x, parentNode.y, d.x, d.y, g_diameter)
+        	return dot[1]
+        })
+        .attr("x2",function(d) {
+        	if( d.parent == 0 )
+        		return d.x
+
+        	var parent = d.parent;
+        	if( d.parent == -1 ) {
+        		if( g_highlight == 0 )
+	        		return d.x
+
+	        	parent = g_highlight
+        	}
+        	var parentNode = findNode(parent);
+			if( parentNode == null )
+				return d.x
+		
+        	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
+        	return dot[0]
+        })
+        .attr("y2",function(d) {        	
+        	if( d.parent == 0 )
+        		return d.y
+
+        	var parent = d.parent;
+        	if( d.parent == -1 ) {
+        		if( g_highlight == 0 )
+	        		return d.y
+
+	        	parent = g_highlight
+        	}
+        	var parentNode = findNode(parent);
+			if( parentNode == null )
+				return d.x
+		
+        	var dot = calcLineXY(d.x, d.y, parentNode.x, parentNode.y, g_diameter + 3)
+        	return dot[1]
+        })
+    	.attr("marker-end", "url(#arrow)")    
          .attr("stroke","#383070")  
          .attr("stroke-width",2)  
     
