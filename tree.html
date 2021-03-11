@@ -106,21 +106,9 @@ input[type=button]:disabled {
 		<input id="toolbar_delete" type="button" class="btn_red" value="Delete" onclick="onDelete()">
 		<input id="toolbar_find" type="button" class="btn_green" value="Find" onclick="onFind()">
 		<input id="toolbar_print" type="button" class="btn_green" value="Print" onclick="onPrint()">
-	</div>
-	<div id="control" style="order: 1"> 
-		<input id="control_skipback" type="button" class="btn_blue" value="Skip Back">
-		<input id="control_stepback" type="button" class="btn_blue" value="Step Back">
-		<input id="control_play" type="button" class="btn_blue" value="Play"  onclick="onPlay()">
-		<input id="control_stepforward" type="button" class="btn_blue" value="Step Forward"  onclick="onStepForward()">
-		<input id="control_skipforward" type="button" class="btn_blue" value="Skip Forward">
-
-		<span>Animation Speed: <span id="animation_speed_val" >800</span></span>
-  		<input type="range" id="animation_speed" min="100" max="2000" value="100" step="100" onchange="onChangeSpeed()">
-
-  		<input id="svg_width" type="number" min="100" max="2000" maxlength="4" value="800"/>
-  		<input id="svg_height" type="number" min="100" max="2000" maxlength="4"  value="400"/>
-		<input type="button" class="btn_blue" value="Change Canvas Size" onclick="onChangeCanvasSize()">
-		<input type="button" class="btn_blue" value="Move Control" onclick="onMoveControl()">
+		
+		<span>Animation Speed: <span id="animation_speed_val" >500</span></span>
+  		<input type="range" id="animation_speed" min="100" max="2000" value="500" step="100" onchange="onChangeSpeed()">
 	</div>
 	<div id="graph">
 		<svg id="d3-splaytree" width="800" height="400">

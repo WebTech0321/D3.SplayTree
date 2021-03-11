@@ -1,45 +1,48 @@
 var svgTree
 var g_Node
-var g_tree = []
-var g_selection = []
-var g_index = 1;
-var g_diameter = 20;
-var g_xStep = 50
-var g_yStep = 50
-var g_startX = 0;
-var g_startY = g_yStep;
-var g_printY = 0;
-var g_Stage = "compare";		//"compare", "move", "insert"
-var g_splayStage = "mark_arrow";		//"mark_arrow", "move"
-var g_highlight = 0;
-var g_highlight_arrow = [0, 0];
-var g_value = null;
-var g_isPlaying = true;
-var g_command = ""		//"insert", "delete", "find", "print"
-var g_print_queue = [];
-var g_delete_left = null;
-var g_delete_right = null;
+var g_tree = []				// global array to show tree 
+var g_selection = []		// circle shows which node is selected (and moving animation)
+var g_index = 1;			// maximum index of node, it increases as new node inserted
+var g_diameter = 20;		// diameter of node
+var g_xStep = 50			// tree graph options for displaying
+var g_yStep = 50			// tree graph options for displaying
+var g_startX = 0;			// starting x point for print
+var g_startY = g_yStep;		// starting y point for print
+var g_printY = 0;			// current y point for printing
+var g_Stage = "compare";				// stages for animation : "compare", "move", "insert"
+var g_splayStage = "mark_arrow";		// stages for splayup 	: "mark_arrow", "move"
+var g_highlight = 0;					// highlighted index of tree
+var g_highlight_arrow = [0, 0];			// highlighted arrow index of tree node
+var g_value = null;						// global value for node for several purpose
+var g_command = ""						// "insert", "delete", "find", "print"
+var g_print_queue = [];					// print queue
+var g_delete_left = null;				// left node of deleting node
+var g_delete_right = null;				// right node of deleting node
 
-const PRINT_POS_X  = 20;
+// options for print
+const PRINT_POS_X  = 20;				
 const PRINT_VERTICAL_GAP  = 20;
 const PRINT_HORIZONTAL_GAP = 40;
 
+
+// node class
 // parent id : 0  : root
 //			  -1 : new node
 function Node(id, val, x, y)
 {
-	this.id = id;
-	this.value = val;
+	this.id = id;				// id of node
+	this.value = val;			// value of node
 	this.x = x;
 	this.y = y;
-	this.leftWidth = 0;
-	this.rightWidth = 0;
-	this.print = false;
-	this.left = 0;
-	this.right = 0;
-	this.parent = -1;	// undefined
+	this.leftWidth = 0;			// left width for calculating position
+	this.rightWidth = 0;		// right width for calculating position
+	this.print = false;			// true when all child nodes are printed
+	this.left = 0;				// index of left child node 
+	this.right = 0;				// index of right child node
+	this.parent = -1;			// index of parent, -1: no parent (haven't inserted yet), 0: this node is root
 }
 
+// check this node is left child
 Node.prototype.isLeftChild = function()		
 {
 	if (this.parent == 0)
@@ -49,109 +52,246 @@ Node.prototype.isLeftChild = function()
 	return findNode(this.parent).left == this.id;	
 }
 
+// on start up
 window.onload = function() {
 
 	svgTree = d3.select("#d3-splaytree")
 	g_Node = svgTree.append("g")
 
-	var w = document.getElementById("svg_width").value
-	var h = document.getElementById("svg_height").value
+	var w = 800
+	var h = 400
 	g_startX = w / 2;
 	g_printY = h - PRINT_VERTICAL_GAP * 3
 
+	// make inNumber as 4 digits
 	document.getElementById("inNumber").oninput = function(e) {
 		if( this.value.length > this.maxLength ) {
 			this.value = this.value.slice(0, this.maxLength);			
 		}
 	}
-
-	setPlayButtons()
 }
 
-function onChangeCanvasSize () {
-	var w = document.getElementById("svg_width").value
-	var h = document.getElementById("svg_height").value
-	document.getElementById("d3-splaytree").setAttribute('width', w)
-	document.getElementById("d3-splaytree").setAttribute('height', h)
-	g_startX = w / 2;
-
-	resizeTree();
-	updateSvg();
-}
-
-function onMoveControl () {
-	var current = document.getElementById("control").style.order;
-	if( current == 0 ) {
-		document.getElementById("control").style.order = 1;
-	} else {
-		document.getElementById("control").style.order = 0;
-	}
-}
-
+// show animation speed on animation_speed_val
 function onChangeSpeed () {
 	document.getElementById("animation_speed_val").innerHTML = document.getElementById("animation_speed").value;
 }
 
+// Insert function
 function onInsert(){
 	var val = document.getElementById("inNumber").value;
 	if( val == '' )
 		return;
 
-	if( g_tree.length == 0 ) {
+	if( g_tree.length == 0 ) {			// if tree is empty, add root node
 		g_value = new Node(g_index++, +val, g_startX, g_startY)
 		g_value.parent = 0;
 		g_tree.push(g_value)
-	} else {
+	} else {							// if tree is not empty, add node on left 
 		g_value = new Node(g_index++, +val, g_diameter * 2, g_diameter * 2)
 		g_tree.push(g_value)
 	}
 
+	// initialize 
 	g_highlight = 0;
 	g_command = "insert"
 	g_Stage = "";	
 
+	// show graph
 	updateSvg();
 
-	if( g_isPlaying )
-		play();
+	// start animation
+	play();
 }
 
-
+// Delete function
 function onDelete(){
 	g_highlight = 0;
 	g_command = "delete"
 	g_Stage = "";
 
-	if( g_isPlaying )
-		play();
+	// start animation
+	play();
 }
 
-
+// Find function
 function onFind(){
 	g_highlight = 0;
 	g_command = "find"
 	g_Stage = "";	
 	g_value = null
 	
-	if( g_isPlaying )
-		play();
+	// start animation
+	play();
 }
 
-
+// Print function
 function onPrint(){
 	g_highlight = 0;
 	g_command = "print"
 	g_Stage = "compare";
 	g_print_queue = []
 
+	// make all node is not printed yet
 	g_tree.map((item) => {
 		item.print = false
 	})
 	
-	if( g_isPlaying )
-		play();
+	// start animation
+	play();
 }
 
+// find root node
+// the node which parent id is zero
+function findRootNode() {
+	var ret = null;
+	g_tree.forEach( (node) => {
+		if( node.parent == 0 )
+			ret = node;
+	})
+
+	return ret;
+}
+
+// find node by id
+function findNode(idx) {
+	var ret = null;
+	g_tree.forEach( (node) => {
+		if( node.id == idx )
+			ret = node;
+	})
+
+	return ret;
+}
+
+// delete node by id
+function deleteRootNode() {
+	g_tree.forEach( (node, idx) => {
+		if( node.parent == 0 )
+			g_tree.splice(idx, 1)
+	})
+}
+
+// find node with max value for tree (subtree)
+function findMax(tree) {
+	var maxNode = tree
+	while( maxNode.right != 0 ) {
+		maxNode = findNode(maxNode.right)
+	}
+
+	return maxNode
+}
+
+// make node with new position when resize tree
+function setNewPosition(tree, xPos, yPos, side) {
+	if( tree == null )
+		return;
+	tree.y =  yPos;
+	if( side == -1 )
+		xPos -= tree.rightWidth;
+	else if ( side == 1 )
+		xPos += tree.leftWidth;
+
+	tree.x = xPos;
+
+	setNewPosition( findNode(tree.left), xPos, yPos + g_yStep, -1 )		// left child tree
+	setNewPosition( findNode(tree.right), xPos, yPos + g_yStep, 1 )		// right child tree
+}
+
+// calculate left & right width with depth
+function resizeWidths(tree) 
+{
+	if (tree == null)
+	{
+		return 0;
+	}
+	tree.leftWidth = Math.max(this.resizeWidths(findNode(tree.left)), g_xStep / 2);
+	tree.rightWidth = Math.max(this.resizeWidths(findNode(tree.right)), g_xStep / 2);
+	return tree.leftWidth + tree.rightWidth;
+}
+
+// resize tree with calcuation
+function resizeTree() {
+	var startPoint = g_startX;
+	var rootNode = findRootNode();
+	if( rootNode ) {
+		resizeWidths(rootNode)				// calculate width with depth
+
+		if(rootNode.leftWidth > startPoint) {		// calibrating start x point
+			startPoint = rootNode.leftWidth
+		} else if( rootNode.rightWidth > startPoint ) {
+			startPoint = Math.max( rootNode.leftWidth, 2 * startPoint - rootNode.rightWidth )
+		}
+
+		setNewPosition(rootNode, startPoint, g_yStep, 0)		// set new position of node based on start point
+	}
+}
+
+// animation function
+function play() {
+	var aniSpeed = document.getElementById("animation_speed").value
+	// disable buttons when animating
+	document.getElementById("toolbar_insert").disabled = true
+	document.getElementById("toolbar_delete").disabled = true
+	document.getElementById("toolbar_find").disabled = true
+	document.getElementById("toolbar_print").disabled = true
+
+	// animate by animation speed
+	setTimeout(function() {
+		var ret = onStepForward()		// animate next step
+		if( ret ) {						// if ret is true, it needs to continue for animation
+			play()
+		} else {			
+			// enable buttons after animate
+			document.getElementById("toolbar_insert").disabled = false
+			document.getElementById("toolbar_delete").disabled = false
+			document.getElementById("toolbar_find").disabled = false
+			document.getElementById("toolbar_print").disabled = false
+		}
+
+		if( !ret ) {
+			g_value = null
+		}
+
+	}, aniSpeed);
+}
+
+// go next step for animation
+function onStepForward () {
+	var ret = false
+	var val = document.getElementById("inNumber").value;
+	
+	if( g_command == "insert" ) {
+		ret = goInsertNextStep()		// animation for insert
+	} else if( g_command == "delete" ) {
+		if( val != '' )
+			ret = goFindNextStep(val)	// animation for delete
+	} else if( g_command == "find" ) {
+		if( val != '' )
+			ret = goFindNextStep(val)	// animation for find
+	} else if( g_command == "print" ) {
+		ret = goPrintNextStep()			// animation for print
+	}
+
+	if( ret == false ) {
+		//goNext
+		ret = splayUp(g_value)			// rearrange tree
+	}
+
+	if( g_command == "delete" && ret == false ) {
+		if( val != '' )
+			ret = goDeleteNextStep(val)			// delete node and merge child tree
+	}
+
+	// redraw tree
+	updateSvg()
+
+	return ret;
+}
+
+// insert step
+// stage: compare - set tree as to show red circle around 
+//		  move  - moving next node 
+//		  insert - insert node	
 function goInsertNextStep() {
 	if( g_tree.length == 0 )
 		return false;
@@ -229,6 +369,9 @@ function goInsertNextStep() {
 	return true;
 }
 
+// find step
+// stage: compare - set tree as to show red circle around 
+//		  move  - moving next node 
 function goFindNextStep(value) {
 	if( g_tree.length == 0 || g_value != null)
 		return false;
@@ -276,7 +419,10 @@ function goFindNextStep(value) {
 
 	return true;
 }
-
+// print step
+// stage: compare - set tree as to show red circle around 
+//		  move  - moving next node 
+//		  print  - print value of node 
 function goPrintNextStep() {
 	if( g_tree.length == 0 || g_Stage == "" )
 		return false;
@@ -341,7 +487,10 @@ function goPrintNextStep() {
 
 	return true;
 }
-
+// delete step
+// stage:   - delete root node and go forward 
+//		  merge  - merge child sub-tree
+//		  end  - all animation is finished
 function goDeleteNextStep(value) {
 	if( g_tree.length == 0 || g_Stage == "end" )
 		return false;
@@ -389,107 +538,7 @@ function goDeleteNextStep(value) {
 	return true;
 }
 
-function findRootNode() {
-	var ret = null;
-	g_tree.forEach( (node) => {
-		if( node.parent == 0 )
-			ret = node;
-	})
-
-	return ret;
-}
-
-function findNode(idx) {
-	var ret = null;
-	g_tree.forEach( (node) => {
-		if( node.id == idx )
-			ret = node;
-	})
-
-	return ret;
-}
-
-function deleteRootNode() {
-	g_tree.forEach( (node, idx) => {
-		if( node.parent == 0 )
-			g_tree.splice(idx, 1)
-	})
-}
-
-function findMax(tree) {
-	var maxNode = tree
-	while( maxNode.right != 0 ) {
-		maxNode = findNode(maxNode.right)
-	}
-
-	return maxNode
-}
-
-function setNewPosition(tree, xPos, yPos, side) {
-	if( tree == null )
-		return;
-	tree.y =  yPos;
-	if( side == -1 )
-		xPos -= tree.rightWidth;
-	else if ( side == 1 )
-		xPos += tree.leftWidth;
-
-	tree.x = xPos;
-
-	setNewPosition( findNode(tree.left), xPos, yPos + g_yStep, -1 )
-	setNewPosition( findNode(tree.right), xPos, yPos + g_yStep, 1 )
-}
-
-function resizeTree() {
-	var startPoint = g_startX;
-	var rootNode = findRootNode();
-	if( rootNode ) {
-		resizeWidths(rootNode)
-
-		if(rootNode.leftWidth > startPoint) {
-			startPoint = rootNode.leftWidth
-		} else if( rootNode.rightWidth > startPoint ) {
-			startPoint = Math.max( rootNode.leftWidth, 2 * startPoint - rootNode.rightWidth )
-		}
-
-		setNewPosition(rootNode, startPoint, g_yStep, 0)
-	}
-}
-
-function resizeWidths(tree) 
-{
-	if (tree == null)
-	{
-		return 0;
-	}
-	tree.leftWidth = Math.max(this.resizeWidths(findNode(tree.left)), g_xStep / 2);
-	tree.rightWidth = Math.max(this.resizeWidths(findNode(tree.right)), g_xStep / 2);
-	return tree.leftWidth + tree.rightWidth;
-}
-
-function play() {
-	var aniSpeed = document.getElementById("animation_speed").value
-	document.getElementById("toolbar_insert").disabled = true
-	document.getElementById("toolbar_delete").disabled = true
-	document.getElementById("toolbar_find").disabled = true
-	document.getElementById("toolbar_print").disabled = true
-	setTimeout(function() {
-		var ret = onStepForward()
-		if( g_isPlaying && ret ) {
-			play()
-		} else {
-			document.getElementById("toolbar_insert").disabled = false
-			document.getElementById("toolbar_delete").disabled = false
-			document.getElementById("toolbar_find").disabled = false
-			document.getElementById("toolbar_print").disabled = false
-		}
-
-		if( !ret ) {
-			g_value = null
-		}
-
-	}, aniSpeed);
-}
+// sub function for splayUp
 
 function singleRotateRight(tree)
 {
@@ -770,6 +819,9 @@ function doubleRotateLeft(tree)
 	resizeTree();	
 }
 
+// rearrange tree
+// splay Stage :  mark_arrow - illustrates the arrows to be changed
+//  			   move - change position of node
 function splayUp(tree) {
 	var ret = true
 	if (tree == null || tree.parent == 0)
@@ -779,9 +831,9 @@ function splayUp(tree) {
 	else {
 		var parentNode = findNode(tree.parent)
 
-		if (parentNode.parent == 0)
+		if (parentNode.parent == 0)			// when parent is root
 		{
-			if (tree.isLeftChild())
+			if (tree.isLeftChild())			// if this is left child
 			{			
 				if( g_splayStage == "mark_arrow" ) {
 					g_highlight_arrow[0] = tree.id
@@ -798,7 +850,7 @@ function splayUp(tree) {
 				}
 			}
 		}
-		else if (tree.isLeftChild() && !parentNode.isLeftChild())
+		else if (tree.isLeftChild() && !parentNode.isLeftChild())		// current node is left child and parent node is right child
 		{
 			if( g_splayStage == "mark_arrow" ) {
 				g_highlight_arrow[0] = tree.id
@@ -806,7 +858,7 @@ function splayUp(tree) {
 			} else
 				doubleRotateLeft(findNode(parentNode.parent));
 		}
-		else if (!tree.isLeftChild() && parentNode.isLeftChild())
+		else if (!tree.isLeftChild() && parentNode.isLeftChild())		// current node is right child and parent node is left child
 		{
 			if( g_splayStage == "mark_arrow" ) {
 				g_highlight_arrow[0] = tree.id
@@ -814,7 +866,7 @@ function splayUp(tree) {
 			} else
 				doubleRotateRight(findNode(parentNode.parent));
 		}
-		else if (tree.isLeftChild())
+		else if (tree.isLeftChild())									// current node and parent node are left child
 		{		
 			if( g_splayStage == "mark_arrow" ) {
 				g_highlight_arrow[0] = tree.id
@@ -822,7 +874,7 @@ function splayUp(tree) {
 			} else
 				zigZigRight(findNode(parentNode.parent));
 		}
-		else
+		else															// current node and parent node are right child
 		{
 			if( g_splayStage == "mark_arrow" ) {
 				g_highlight_arrow[0] = tree.id
@@ -841,60 +893,7 @@ function splayUp(tree) {
 	return ret;
 }
 
-function setPlayButtons() {
-	if( g_isPlaying ) {
-		document.getElementById("control_stepback").disabled = true;
-		document.getElementById("control_stepforward").disabled = true;
-		document.getElementById("control_skipforward").disabled = true;
-
-		document.getElementById("control_play").value = "Pause";		
-	} else {
-		document.getElementById("control_stepback").disabled = false;
-		document.getElementById("control_stepforward").disabled = false;
-		document.getElementById("control_skipforward").disabled = false;
-
-		document.getElementById("control_play").value = "Play";		
-	}
-}
-
-function onPlay() {
-	g_isPlaying = !g_isPlaying
-
-	setPlayButtons()
-	play();
-}
-
-function onStepForward () {
-	var ret = false
-	var val = document.getElementById("inNumber").value;
-	
-	if( g_command == "insert" ) {
-		ret = goInsertNextStep()
-	} else if( g_command == "delete" ) {
-		if( val != '' )
-			ret = goFindNextStep(val)
-	} else if( g_command == "find" ) {
-		if( val != '' )
-			ret = goFindNextStep(val)
-	} else if( g_command == "print" ) {
-		ret = goPrintNextStep()
-	}
-
-	if( ret == false ) {
-		//goNext
-		ret = splayUp(g_value)
-	}
-
-	if( g_command == "delete" && ret == false ) {
-		if( val != '' )
-			ret = goDeleteNextStep(val)
-	}
-
-	updateSvg()
-
-	return ret;
-}
-
+// make line as put on boundary of circle
 function calcLineXY(x1, y1, x2, y2, r) {
 	var ret = [0, 0]
     var angle = Math.atan2( y1 - y2, x1 - x2 ); 
@@ -905,6 +904,7 @@ function calcLineXY(x1, y1, x2, y2, r) {
 	return ret;
 }
 
+// all drawings being done here
 function updateSvg() {
     //rejoin data
     var nodes = g_Node.selectAll(".node").data(g_tree);
@@ -914,7 +914,7 @@ function updateSvg() {
     				.append("g")
     				.attr('class', 'node')
 
-    var links = node.append("line")
+    var links = node.append("line")				// add arrow line with unlink : unlink - hidden, link - visible
     	.attr("class", "unlink")
     	.attr("marker-end", "url(#arrow)")    	
         .attr("x1",function(d)  { return d.x })
@@ -925,6 +925,7 @@ function updateSvg() {
          .attr("stroke-width",2)  
     
 
+	// add circle with value on it's position
     var nodeDot = node.append("g")
     	.attr('class', 'point')
     	.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")" })
@@ -942,7 +943,7 @@ function updateSvg() {
         .text(function(d) { return d.value })
 
 	var aniSpeed = document.getElementById("animation_speed").value
-    //update all circles to new positions
+    //update all circles to new positions with transition
     var updateNode = nodes.transition()
         .duration(aniSpeed / 2)
 
@@ -963,6 +964,7 @@ function updateSvg() {
 	updateNode.select(".textcircle")
 		.text(function(d) { return d.value })
 
+	// 
     updateNode.select(".unlink, .link")
     	.attr("class", function(d) {
     		if( d.parent == 0 || d.parent == -1 ) 
@@ -973,7 +975,7 @@ function updateSvg() {
         	return "link"
     	})    	
         .attr("x1",function(d)  {
-        	if( d.parent == 0 )
+        	if( d.parent == 0 )				// if root node or node on lobby, it doesn't need to calcuate 
         		return d.x
 
         	var parent = d.parent;
@@ -1057,7 +1059,7 @@ function updateSvg() {
 			return "#383070"
         });
 
-    //////////////////////////////////////////
+    ////////////////// selection circle ////////////////////////
     var selection = g_Node.selectAll(".selection").data(g_selection);
 	
     selection.exit().remove();//remove unneeded circles
@@ -1086,12 +1088,13 @@ function updateSvg() {
 	updatePrint()
 }
 
+// shows print queue
 function updatePrint() {
 	//rejoin data
     var nodes = g_Node.selectAll(".print").data(g_print_queue);
     
-	nodes.exit().remove();//remove unneeded circles
-    var node = nodes.enter()
+	nodes.exit().remove();//remove unneeded 
+    var node = nodes.enter()		//add texts to current node
 			.append("text")
 			.attr('class', 'print')
 			.attr('text-anchor', 'middle')
@@ -1100,7 +1103,7 @@ function updatePrint() {
 			.text(function(d) { return d.value })
 
 	var aniSpeed = document.getElementById("animation_speed").value
-    //update all circles to new positions
+    //update all texts to new positions
     nodes.transition()
         .duration(aniSpeed / 2)
         .attr("x", function(d, i) { 
